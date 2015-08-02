@@ -1,7 +1,5 @@
 #!/bin/bash
 
-INFORMIX_USER_PASSWORD="informix"
-INFORMIX_USER_HOME="/home/informix"
 EXTRACT_DIR="/tmp/ifx-install"
 CUSTOM_RESPONSE_FILE="$EXTRACT_DIR/ifx-install.responses"
 LOG="/tmp/ifx-install.log"
@@ -19,11 +17,11 @@ fail()
 
 log()
 {
-    echo "$(date "+%Y-%m-%d %H:%M:%S"): $1" | tee -a $LOG
+    echo "$(date "+%Y-%m-%d %H:%M:%S") $1" | tee -a $LOG
 }
 
 #-------------------------------------------------------------------------------
-# Installation should be made by root.
+# Check that script is running with root user.
 #-------------------------------------------------------------------------------
 
 if [ "$(whoami)" != "root" ]; then
@@ -85,10 +83,6 @@ if [ -e "$INFORMIXDIR" ]; then
     fail "Error the installation directory \"$INFORMIXDIR\" already exists"
 fi
 
-if ( grep -Eq "\s+$PORT\/" /etc/services ); then
-    fail "The port \"$PORT\" already defined in /etc/services"
-fi
-
 #-------------------------------------------------------------------------------
 # Dependencies install.
 #-------------------------------------------------------------------------------
@@ -97,7 +91,7 @@ log "Installing dependencies with apt-get..."
 
 {
     apt-get update -qy \
-    && apt-get install -qy apt-utils adduser file sudo
+    && apt-get install -qy apt-utils adduser file sudo \
     && apt-get install -qy libaio1 bc pdksh libncurses5 ncurses-bin libpam0g
 
 } &>>$LOG
@@ -160,4 +154,67 @@ log "Installing Informix in $INFORMIXDIR (this will take some minutes)..."
 
 if ! ( $EXTRACT_DIR/ids_install $IFX_INSTALL_ARGS &>>$LOG ); then
     fail "Error installing Informix"
+fi
+
+#-------------------------------------------------------------------------------
+# onconfig file creation.
+#-------------------------------------------------------------------------------
+
+log "Creating onconfig file \"$ONCONFIG\""
+
+if ! ( cp -v "$INFORMIXDIR/etc/onconfig.std" "$ONCONFIG" &>>$LOG ); then
+    fail "Error creating \"onconfig\" file"
+fi
+
+sed -r -i -e "s#^\s*ROOTPATH\s+.*#ROOTPATH $ROOTPATH#" \
+          -e "s#^\s*MSGPATH\s+.*#MSGPATH $MSGPATH#" \
+          -e "s#^\s*CONSOLE\s+.*#CONSOLE $CONSOLE#" \
+          -e "s#^\s*DBSERVERNAME\s+.*#DBSERVERNAME $INFORMIXSERVER#" \
+          -e "s#^\s*DEF_TABLE_LOCKMODE\s+.*#DEF_TABLE_LOCKMODE $DEF_TABLE_LOCKMODE#" \
+          -e "s#^\s*TAPEDEV\s+.*#TAPEDEV $TAPEDEV#" \
+          -e "s#^\s*LTAPEDEV\s+.*#LTAPEDEV $LTAPEDEV#" "$ONCONFIG"
+
+if [ $? -ne 0 ]; then
+    fail "Error creating \"onconfig\" file"
+fi
+
+if ! ( chown informix.informix "$ONCONFIG" &>>$LOG ); then
+    fail "Error changin owner of \"onconfig\" file"
+fi
+
+#-------------------------------------------------------------------------------
+# sqlhosts file creation.
+#-------------------------------------------------------------------------------
+
+log "Creating sqlhosts file \"$SQLHOSTS\""
+
+if ! ( cp -v "$INFORMIXDIR/etc/sqlhosts.std" "$SQLHOSTS" &>>$LOG ); then
+    fail "Error creating \"sqlhosts\" file"
+fi
+
+SQLHOSTS_CONFIG="${INFORMIXSERVER}\tonsoctcp\tlocalhost\t${SERVICE_NAME}"
+
+sed -r -i -e "s#^\s*demo_on\s+.*#$SQLHOSTS_CONFIG#" "$SQLHOSTS"
+
+if [ $? -ne 0 ]; then
+    fail "Error creating \"sqlhosts\" file"
+fi
+
+if ! ( chown informix.informix "$SQLHOSTS" &>>$LOG ); then
+    fail "Error changin owner of \"sqlhosts\" file"
+fi
+
+#-------------------------------------------------------------------------------
+# Add port to /etc/services.
+#-------------------------------------------------------------------------------
+
+log "Adding port \"$PORT\" to /etc/services"
+
+if ! ( grep -Eq "^${SERVICE_NAME}\s+${PORT}/tcp" /etc/services ); then
+
+    cp -v /etc/services /etc/services.bak &>>$LOG
+
+    SERVICE="${SERVICE_NAME}\t${PORT}/tcp\t\t\t# Informix instance"
+
+    echo -e "$SERVICE" >> /etc/services
 fi
