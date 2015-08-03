@@ -20,6 +20,13 @@ log()
     echo "$(date "+%Y-%m-%d %H:%M:%S") $1" | tee -a $LOG
 }
 
+chown_to_informix()
+{
+    if ! ( chown informix.informix "$1" &>>$LOG ); then
+        fail "Error changin owner of \"${1}\" file"
+    fi
+}
+
 #-------------------------------------------------------------------------------
 # Check that script is running with root user.
 #-------------------------------------------------------------------------------
@@ -178,9 +185,7 @@ if [ $? -ne 0 ]; then
     fail "Error creating \"onconfig\" file"
 fi
 
-if ! ( chown informix.informix "$ONCONFIG" &>>$LOG ); then
-    fail "Error changin owner of \"onconfig\" file"
-fi
+chown_to_informix "$ONCONFIG"
 
 #-------------------------------------------------------------------------------
 # sqlhosts file creation.
@@ -200,9 +205,7 @@ if [ $? -ne 0 ]; then
     fail "Error creating \"sqlhosts\" file"
 fi
 
-if ! ( chown informix.informix "$SQLHOSTS" &>>$LOG ); then
-    fail "Error changin owner of \"sqlhosts\" file"
-fi
+chown_to_informix "$SQLHOSTS"
 
 #-------------------------------------------------------------------------------
 # Add port to /etc/services.
@@ -218,3 +221,31 @@ if ! ( grep -Eq "^${SERVICE_NAME}\s+${PORT}/tcp" /etc/services ); then
 
     echo -e "$SERVICE" >> /etc/services
 fi
+
+#-------------------------------------------------------------------------------
+# Create environment file.
+#-------------------------------------------------------------------------------
+
+log "Creating environment file \"${ENVIRONMENT_FILE}\""
+
+{
+    echo "export INFORMIXSERVER=\"${INFORMIXSERVER}\""
+    echo "export INFORMIXDIR=\"${INFORMIXDIR}\""
+    echo "export INFORMIXSQLHOSTS==\"${SQLHOSTS}\""
+    echo "export INFORMIXTERM=\"terminfo\""
+    echo "export ONCONFIG=\"${ONCONFIG}\""
+    echo "export CLIENT_LOCALE=\"${CLIENT_LOCALE}\""
+    echo "export DB_LOCALE=\"${DB_LOCALE}\""
+    echo "export DB_DATE=\"${DBDATE}\""
+    echo "export DBDELIMITER=\"${DBDELIMITER}\"";
+    echo "export PATH=\"\${INFORMIXDIR}/bin:\${INFORMIXDIR}/lib:\${INFORMIXDIR}/lib/esql:\${PATH}\""
+    echo "export LD_LIBRARY_PATH=\"\${INFORMIXDIR}/lib:\$INFORMIXDIR/lib/esql:\${LD_LIBRARY_PATH}\""
+    echo "export PS1=\"\u@\h [\${INFORMIXSERVER}]:\w\$\""
+
+} > "$ENVIRONMENT_FILE"
+
+if [ $? -ne 0 ]; then
+    fail "Error creating environment file"
+fi
+
+chown_to_informix "$ENVIRONMENT_FILE"
