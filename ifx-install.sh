@@ -2,6 +2,7 @@
 
 EXTRACT_DIR="/tmp/ifx-install"
 CUSTOM_RESPONSE_FILE="$EXTRACT_DIR/ifx-install.responses"
+INIT_FILE="/tmp/ifx-install-initialization.sh"
 LOG="/tmp/ifx-install.log"
 
 #-------------------------------------------------------------------------------
@@ -25,6 +26,22 @@ chown_to_informix()
     if ! ( chown informix.informix "$1" &>>$LOG ); then
         fail "Error changin owner of \"${1}\" file"
     fi
+}
+
+create_directory_as_informix()
+{
+    if [ -d "$1" ]; then
+        return
+    fi
+
+    if ( ! sudo -u informix mkdir -p "${1}" &>>$LOG ); then
+        fail "Error creating directory \"${1}\""
+    fi
+}
+
+create_base_directory()
+{
+    create_directory_as_informix "$(dirname "$1")"
 }
 
 #-------------------------------------------------------------------------------
@@ -164,50 +181,6 @@ if ! ( $EXTRACT_DIR/ids_install $IFX_INSTALL_ARGS &>>$LOG ); then
 fi
 
 #-------------------------------------------------------------------------------
-# onconfig file creation.
-#-------------------------------------------------------------------------------
-
-log "Creating onconfig file \"$ONCONFIG\""
-
-if ! ( cp -v "$INFORMIXDIR/etc/onconfig.std" "$ONCONFIG" &>>$LOG ); then
-    fail "Error creating \"onconfig\" file"
-fi
-
-sed -r -i -e "s#^\s*ROOTPATH\s+.*#ROOTPATH $ROOTPATH#" \
-          -e "s#^\s*MSGPATH\s+.*#MSGPATH $MSGPATH#" \
-          -e "s#^\s*CONSOLE\s+.*#CONSOLE $CONSOLE#" \
-          -e "s#^\s*DBSERVERNAME\s+.*#DBSERVERNAME $INFORMIXSERVER#" \
-          -e "s#^\s*DEF_TABLE_LOCKMODE\s+.*#DEF_TABLE_LOCKMODE $DEF_TABLE_LOCKMODE#" \
-          -e "s#^\s*TAPEDEV\s+.*#TAPEDEV $TAPEDEV#" \
-          -e "s#^\s*LTAPEDEV\s+.*#LTAPEDEV $LTAPEDEV#" "$ONCONFIG"
-
-if [ $? -ne 0 ]; then
-    fail "Error creating \"onconfig\" file"
-fi
-
-chown_to_informix "$ONCONFIG"
-
-#-------------------------------------------------------------------------------
-# sqlhosts file creation.
-#-------------------------------------------------------------------------------
-
-log "Creating sqlhosts file \"$SQLHOSTS\""
-
-if ! ( cp -v "$INFORMIXDIR/etc/sqlhosts.std" "$SQLHOSTS" &>>$LOG ); then
-    fail "Error creating \"sqlhosts\" file"
-fi
-
-SQLHOSTS_CONFIG="${INFORMIXSERVER}\tonsoctcp\tlocalhost\t${SERVICE_NAME}"
-
-sed -r -i -e "s#^\s*demo_on\s+.*#$SQLHOSTS_CONFIG#" "$SQLHOSTS"
-
-if [ $? -ne 0 ]; then
-    fail "Error creating \"sqlhosts\" file"
-fi
-
-chown_to_informix "$SQLHOSTS"
-
-#-------------------------------------------------------------------------------
 # Add port to /etc/services.
 #-------------------------------------------------------------------------------
 
@@ -223,6 +196,76 @@ if ! ( grep -Eq "^${SERVICE_NAME}\s+${PORT}/tcp" /etc/services ); then
 fi
 
 #-------------------------------------------------------------------------------
+# onconfig file creation.
+#-------------------------------------------------------------------------------
+
+ONCONFIG_PATH="$INFORMIXDIR/etc/$ONCONFIG"
+
+log "Creating onconfig file \"$ONCONFIG_PATH\""
+
+if ! ( cp -v "$INFORMIXDIR/etc/onconfig.std" "$ONCONFIG_PATH" &>>$LOG ); then
+    fail "Error creating \"onconfig\" file"
+fi
+
+sed -r -i -e "s#^ROOTPATH\s+.*#ROOTPATH $ROOTPATH#" \
+          -e "s#^ROOTNAME\s+.*#ROOTNAME $ROOTNAME#" \
+          -e "s#^MSGPATH\s+.*#MSGPATH $MSGPATH#" \
+          -e "s#^CONSOLE\s+.*#CONSOLE $CONSOLE#" \
+          -e "s#^DBSERVERNAME\s+.*#DBSERVERNAME $INFORMIXSERVER#" \
+          -e "s#^DEF_TABLE_LOCKMODE\s+.*#DEF_TABLE_LOCKMODE $DEF_TABLE_LOCKMODE#" \
+          -e "s#^TAPEDEV\s+.*#TAPEDEV $TAPEDEV#" \
+          -e "s#^LTAPEDEV\s+.*#LTAPEDEV $LTAPEDEV#" "$ONCONFIG_PATH"
+
+if [ $? -ne 0 ]; then
+    fail "Error creating \"onconfig\" file"
+fi
+
+chown_to_informix "$ONCONFIG_PATH"
+
+#-------------------------------------------------------------------------------
+# sqlhosts file creation.
+#-------------------------------------------------------------------------------
+
+log "Creating sqlhosts file \"$INFORMIXSQLHOSTS\""
+
+if ! ( cp -v "$INFORMIXDIR/etc/sqlhosts.std" "$INFORMIXSQLHOSTS" &>>$LOG ); then
+    fail "Error creating \"sqlhosts\" file"
+fi
+
+INFORMIXSQLHOSTS_CONFIG="${INFORMIXSERVER}\tonsoctcp\tlocalhost\t${SERVICE_NAME}"
+
+sed -r -i -e "s#^\s*demo_on\s+.*#$INFORMIXSQLHOSTS_CONFIG#" "$INFORMIXSQLHOSTS"
+
+if [ $? -ne 0 ]; then
+    fail "Error creating \"sqlhosts\" file"
+fi
+
+chown_to_informix "$INFORMIXSQLHOSTS"
+
+
+#-------------------------------------------------------------------------------
+# Creation of directories as user informix.
+#-------------------------------------------------------------------------------
+
+create_base_directory "$ROOTPATH"
+create_base_directory "$MSGPATH"
+create_base_directory "$CONSOLE"
+create_base_directory "$TAPEDEV"
+create_base_directory "$LTAPEDEV"
+
+#-------------------------------------------------------------------------------
+# Creation of the primary chunk.
+#-------------------------------------------------------------------------------
+
+log "Creating primary chunk \"$ROOTPATH\""
+
+if ! ( touch "$ROOTPATH" && chmod 660 "$ROOTPATH" ); then
+    fail "Error creating primary chunk"
+fi
+
+chown_to_informix "$ROOTPATH"
+
+#-------------------------------------------------------------------------------
 # Create environment file.
 #-------------------------------------------------------------------------------
 
@@ -231,7 +274,7 @@ log "Creating environment file \"${ENVIRONMENT_FILE}\""
 {
     echo "export INFORMIXSERVER=\"${INFORMIXSERVER}\""
     echo "export INFORMIXDIR=\"${INFORMIXDIR}\""
-    echo "export INFORMIXSQLHOSTS==\"${SQLHOSTS}\""
+    echo "export INFORMIXSQLHOSTS=\"${INFORMIXSQLHOSTS}\""
     echo "export INFORMIXTERM=\"terminfo\""
     echo "export ONCONFIG=\"${ONCONFIG}\""
     echo "export CLIENT_LOCALE=\"${CLIENT_LOCALE}\""
@@ -249,3 +292,19 @@ if [ $? -ne 0 ]; then
 fi
 
 chown_to_informix "$ENVIRONMENT_FILE"
+
+#-------------------------------------------------------------------------------
+# Initializing Informix server.
+#-------------------------------------------------------------------------------
+
+log "Initializing Informix server"
+
+echo ". \"${ENVIRONMENT_FILE}\" && oninit -iy && onstat -m" > "${INIT_FILE}"
+
+sudo -u informix bash "${INIT_FILE}"
+
+if [ $? -ne 0 ]; then
+    log "Error initializing Informix server"
+fi
+
+rm "${INIT_FILE}" &>/dev/null
