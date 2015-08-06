@@ -11,7 +11,7 @@ LOG="/tmp/ifx-install.log"
 
 fail()
 {
-    log "$2" >&2
+    log "$1" >&2
     log "Installation failed. Check the log file in \"$LOG\"." >&2
     exit 1
 }
