@@ -73,6 +73,13 @@ fi
 
 case "$ARCHIVE" in
 
+    *11.70*)
+        IFX_VERSION="11.70"
+        RESPONSE_FILE="bundle.properties"
+        IFX_INSTALL_ARGS="-i silent -f $CUSTOM_RESPONSE_FILE "
+        IFX_INSTALL_ARGS="$IFX_INSTALL_ARGS -DLICENSE_ACCEPTED=TRUE"
+        ;;
+
     *12.10*)
         IFX_VERSION="12.10"
         RESPONSE_FILE="bundle.properties"
@@ -81,7 +88,7 @@ case "$ARCHIVE" in
         ;;
 
     *)
-        fatal "Unrecognized or not supported Informix version"
+        fail "Unrecognized or not supported Informix version"
         ;;
 esac
 
@@ -159,7 +166,7 @@ fi
 
 case "$IFX_VERSION" in
 
-    12.10)
+    11.70|12.10)
 
         {
             echo "USER_INSTALL_DIR=$INFORMIXDIR"
