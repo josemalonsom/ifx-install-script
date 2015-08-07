@@ -41,7 +41,22 @@ create_directory_as_informix()
 
 create_base_directory()
 {
-    create_directory_as_informix "$(dirname "$1")"
+    create_directory_as_informix "${1%/*}"
+}
+
+load_config()
+{
+    local CONFIG="${0%/*}/config/${1}.config"
+
+    if ! [ -e "$CONFIG" ]; then
+        fail "The config file \"$CONFIG\" does not exist"
+    fi
+
+    source "$CONFIG"
+
+    if [ $? -ne 0 ]; then
+        fail "Error loading config file \"$CONFIG\""
+    fi
 }
 
 #-------------------------------------------------------------------------------
@@ -57,7 +72,7 @@ fi
 #-------------------------------------------------------------------------------
 
 if [ $# -ne 1 ]; then
-    echo "Usage: $(basename $0) <informix-file.tar>";
+    echo "Usage: ${0##*/} <informix-file.tar>";
     exit 1
 fi
 
@@ -98,17 +113,8 @@ log "Informix version $IFX_VERSION"
 # Load specific config for the Informix version.
 #-------------------------------------------------------------------------------
 
-CONFIG="$(dirname $0)/config/$IFX_VERSION.config"
-
-if ! [ -e "$CONFIG" ]; then
-    fail "The config file \"$CONFIG\" does not exist"
-fi
-
-source "$CONFIG"
-
-if [ $? -ne 0 ]; then
-    fail "Error loading config file \"$CONFIG\""
-fi
+load_config "$IFX_VERSION"
+load_config "common"
 
 if [ -e "$INFORMIXDIR" ]; then
     fail "Error the installation directory \"$INFORMIXDIR\" already exists"
