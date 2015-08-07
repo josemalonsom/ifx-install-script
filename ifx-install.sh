@@ -222,6 +222,7 @@ fi
 
 sed -r -i -e "s#^ROOTPATH\s+.*#ROOTPATH $ROOTPATH#" \
           -e "s#^ROOTNAME\s+.*#ROOTNAME $ROOTNAME#" \
+          -e "s#^SERVERNUM\s+.*#SERVERNUM $SERVERNUM#" \
           -e "s#^MSGPATH\s+.*#MSGPATH $MSGPATH#" \
           -e "s#^CONSOLE\s+.*#CONSOLE $CONSOLE#" \
           -e "s#^DBSERVERNAME\s+.*#DBSERVERNAME $INFORMIXSERVER#" \
