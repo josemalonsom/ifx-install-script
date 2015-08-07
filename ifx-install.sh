@@ -313,12 +313,15 @@ chown_to_informix "$ENVIRONMENT_FILE"
 
 log "Initializing Informix server"
 
-echo ". \"${ENVIRONMENT_FILE}\" && oninit -iy && onstat -m" > "${INIT_FILE}"
+echo ". \"${ENVIRONMENT_FILE}\" && oninit -iy && onstat -m && onmode -ky" \
+    > "${INIT_FILE}"
 
-sudo -u informix bash "${INIT_FILE}"
+sudo -u informix bash "${INIT_FILE}" &>>$LOG
 
 if [ $? -ne 0 ]; then
     log "Error initializing Informix server"
 fi
 
 rm "${INIT_FILE}" &>/dev/null
+
+log "Installation complete"
