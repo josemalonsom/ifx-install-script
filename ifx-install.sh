@@ -222,7 +222,7 @@ if ! ( grep -Eq "^${SERVICE_NAME}\s+${PORT}/tcp" /etc/services ); then
 
     cp -v /etc/services /etc/services.bak &>>$LOG
 
-    SERVICE="${SERVICE_NAME}\t${PORT}/tcp\t\t\t# Informix instance"
+    SERVICE="${SERVICE_NAME}\t\t${PORT}/tcp\t\t\t# Informix instance"
 
     echo -e "$SERVICE" >> /etc/services
 fi
